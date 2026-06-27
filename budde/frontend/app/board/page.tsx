@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchSession, logout, type User } from "../lib/auth";
+import NavTabs from "../components/NavTabs";
 import {
   assignTask,
   createTask,
@@ -11,7 +12,6 @@ import {
   listMembers,
   listTasks,
   startDispatch,
-  syncMembers,
   updateTaskStatus,
   type KanbanTask,
   type Member,
@@ -183,7 +183,9 @@ export default function BoardPage() {
               Bảng dùng chung · {members.length} thành viên · {tasks.length} task
             </p>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-xl">
+          <div className="flex flex-wrap items-center gap-3">
+            <NavTabs />
+            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-xl">
             {user && (
               <div className="flex items-center gap-2">
                 <div
@@ -207,6 +209,7 @@ export default function BoardPage() {
             >
               Đăng xuất
             </button>
+            </div>
           </div>
         </header>
 
@@ -221,13 +224,6 @@ export default function BoardPage() {
               + Tham gia board
             </button>
           )}
-          <button
-            disabled={busy}
-            onClick={() => withBusy(async () => void (await syncMembers()))}
-            className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
-          >
-            Đồng bộ tất cả profile
-          </button>
           <button
             disabled={busy || dispatching}
             onClick={handleDispatch}

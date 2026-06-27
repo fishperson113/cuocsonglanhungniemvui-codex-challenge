@@ -20,7 +20,7 @@ interface ListResponse {
   total: number;
 }
 
-const emptyForm = { name: "", email: "", role: "user", description: "" };
+const emptyForm = { name: "", email: "", role: "", description: "" };
 
 const inputClass =
   "w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-white placeholder-slate-500 outline-none transition-all focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/40";
@@ -200,15 +200,13 @@ export default function ProfilesPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-medium text-slate-300">Vai trò</label>
-                  <select
+                  <label className="mb-1.5 block text-sm font-medium text-slate-300">Title</label>
+                  <input
                     className={inputClass}
                     value={form.role}
                     onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  >
-                    <option className="bg-slate-800" value="user">user</option>
-                    <option className="bg-slate-800" value="admin">admin</option>
-                  </select>
+                    placeholder="VD: Học sinh, Giáo viên, Mentor..."
+                  />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-slate-300">Mô tả</label>
@@ -296,15 +294,11 @@ export default function ProfilesPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="truncate font-medium text-white">{p.name}</span>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                              p.role === "admin"
-                                ? "bg-amber-500/20 text-amber-300"
-                                : "bg-slate-500/20 text-slate-300"
-                            }`}
-                          >
-                            {p.role}
-                          </span>
+                          {p.role && (
+                            <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-xs font-medium text-indigo-300">
+                              {p.role}
+                            </span>
+                          )}
                         </div>
                         <div className="truncate text-sm text-slate-400">{p.email}</div>
                         {p.description && (

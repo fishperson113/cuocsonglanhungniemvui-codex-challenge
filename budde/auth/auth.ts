@@ -270,6 +270,15 @@ async function requireAdmin(): Promise<BetterUserRow> {
   return user;
 }
 
+function isStrongPassword(password: string): boolean {
+  return (
+    password.length >= 6 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
+}
 // ---- Auth Endpoints (Better Auth wrappers) ----
 
 export const register = api(
@@ -281,7 +290,9 @@ export const register = api(
     const name = p.name?.trim() || email.split("@")[0];
 
     if (!email) throw APIError.invalidArgument("email is required");
-    if (password.length < 6) throw APIError.invalidArgument("password must be at least 6 characters");
+    if (!isStrongPassword(password)) {
+      throw APIError.invalidArgument("password must be at least 6 characters and include uppercase, lowercase, number, and special character");
+    }
     if (role !== "admin" && role !== "user") throw APIError.invalidArgument("invalid role");
 
     if (role === "admin") {
@@ -479,3 +490,4 @@ export const disable = api(
     return toPublicUser(row);
   },
 );
+

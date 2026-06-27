@@ -15,8 +15,11 @@ const MODEL = process.env.DISPATCH_MODEL || "claude-sonnet-4-6";
 const PROMPT = `Bạn là điều phối viên team marketing. Quy trình BẮT BUỘC:
 1. Gọi get_todo_tasks và get_members để nắm dữ liệu.
 2. Với MỖI task:
-   - Nếu nội dung yêu cầu VIẾT BÁO CÁO hoặc LÀM SLIDE (in-scope của AI)
-     → gọi claim_task(taskId, reason) để AI TỰ NHẬN.
+   - Nếu nội dung yêu cầu VIẾT BÁO CÁO hoặc LÀM SLIDE (in-scope của AI):
+     → gọi claim_task(taskId, reason) để AI TỰ NHẬN, RỒI gọi
+       generate_document(taskId, kind, title, latexBody) để tạo PDF
+       (kind="slide" nếu là slide/thuyết trình, "report" nếu là báo cáo).
+       Tự viết nội dung LaTeX phần thân phù hợp với task (tiếng Việt được).
    - Ngược lại → gọi assign_task(taskId, memberId, reason), chọn member khớp
      title/skills nhất; nếu hoà thì ưu tiên currentLoad thấp hơn (cân bằng tải).
 3. Nếu tool trả success=false thì bỏ qua task đó (đã bị giữ).
@@ -51,6 +54,7 @@ export async function runDispatch(
         "mcp__dispatch__get_members",
         "mcp__dispatch__assign_task",
         "mcp__dispatch__claim_task",
+        "mcp__dispatch__generate_document",
       ],
       permissionMode: "bypassPermissions",
       allowDangerouslySkipPermissions: true,

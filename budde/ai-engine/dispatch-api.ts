@@ -32,8 +32,8 @@ export const startDispatch = api<void, StartResponse>(
     const job = createJob(jobId);
     log.info("dispatch: start job", { jobId });
 
-    // ── Fire-and-forget: agent chạy nền, mutate job qua callback ──────
-    // Context request được AsyncLocalStorage giữ lại nên ~encore/clients (board) vẫn gọi được.
+    // Fire-and-forget: agent chạy nền và mutate job qua callback.
+    // MCP tools dùng encoreRepo direct-DB nên không gọi /tasks qua auth gateway.
     void (async () => {
       try {
         const summary = await runDispatch(encoreRepo, (line) => {

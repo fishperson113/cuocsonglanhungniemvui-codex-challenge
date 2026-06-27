@@ -1,0 +1,27 @@
+% Report template — XeLaTeX + article, self-contained (ho tro tieng Viet qua fontspec).
+% AI chi dien phan than (BODY) bang cac \section{...}, doan van, itemize, bang...
+% KHONG sua preamble, KHONG dung \documentclass. Cac placeholder do compile helper thay.
+\documentclass[12pt,a4paper]{article}
+
+\usepackage{fontspec}
+\setmainfont{Times New Roman}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{titlesec}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true, linkcolor=blue, urlcolor=blue}
+
+\title{\textbf{%%TITLE%%}\\[0.3em]\large %%SUBTITLE%%}
+\author{%%AUTHOR%%}
+\date{%%DATE%%}
+
+\begin{document}
+
+\maketitle
+
+%%BODY%%
+
+\end{document}

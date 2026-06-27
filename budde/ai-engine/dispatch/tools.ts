@@ -8,6 +8,7 @@
 import { tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import type { DispatchRepository } from "./contract.ts";
+import { compileLatex } from "../latex/compile.ts";
 
 const ok = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data) }],
@@ -75,6 +76,37 @@ export function createDispatchServer(
               : `✗ claim #${taskId} thất bại (task không còn 'todo')`,
           );
           return ok({ success });
+        },
+      ),
+      tool(
+        "generate_document",
+        "Tạo tài liệu PDF (slide hoặc report) cho task in-scope AI đã claim. " +
+          "AI CHỈ viết phần THÂN LaTeX: slide → các \\begin{frame}...\\end{frame}; " +
+          "report → các \\section{...} + đoạn văn/itemize/bảng. " +
+          "TUYỆT ĐỐI KHÔNG viết \\documentclass hay preamble (đã có sẵn trong template). " +
+          "Nếu trả success=false kèm error → đọc log, sửa latexBody rồi gọi lại.",
+        {
+          taskId: z.number().describe("id task đã claim"),
+          kind: z.enum(["slide", "report"]).describe("slide cho thuyết trình, report cho báo cáo"),
+          title: z.string().describe("tiêu đề tài liệu"),
+          subtitle: z.string().optional().describe("phụ đề (tuỳ chọn)"),
+          latexBody: z.string().describe("phần thân LaTeX hợp lệ, KHÔNG có preamble"),
+        },
+        async ({ taskId, kind, title, subtitle, latexBody }) => {
+          try {
+            const res = await compileLatex(kind, {
+              title,
+              subtitle,
+              author: "AI Agent",
+              body: latexBody,
+            });
+            await repo.attachArtifact(taskId, res.url, "review");
+            log(`📄 generate_document #${taskId} (${kind}) → ${res.url}`);
+            return ok({ success: true, url: res.url });
+          } catch (e) {
+            log(`✗ compile #${taskId} lỗi — agent sẽ sửa LaTeX`);
+            return ok({ success: false, error: String(e).slice(-1500) });
+          }
         },
       ),
     ],

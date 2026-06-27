@@ -1,5 +1,5 @@
 {
-	"id":   "budde-sosi",
+	"id":   "",
 	"lang": "typescript",
 	"build": {
 		"docker": {

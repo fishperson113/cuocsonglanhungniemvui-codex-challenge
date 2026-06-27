@@ -20,6 +20,7 @@ import {
   listMembers,
   listTasks,
   startDispatch,
+  syncMembers,
   updateTaskStatus,
   type KanbanTask,
   type Member,
@@ -311,7 +312,7 @@ export default function BoardPage() {
                     </div>
                   </div>
                 </div>
-              ) : null}
+              )}
               <button
                 type="button"
                 onClick={handleLogout}
@@ -346,15 +347,9 @@ export default function BoardPage() {
               <ArrowPathIcon className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
               Sync profiles
             </button>
-          )}
+
             <button
-              disabled={busy}
-              onClick={() => withBusy(async () => void (await syncMembers()))}
-              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
-            >
-              Đồng bộ tất cả profile
-            </button>
-            <button
+              type="button"
               disabled={busy || dispatching}
               onClick={handleDispatch}
               className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-cyan-500/30 disabled:opacity-50"

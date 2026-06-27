@@ -9,7 +9,8 @@
 |---|---|---|
 | **Phase 1** | Wrapper subprocess `claude` CLI + smoke test | ✅ **Done & verified** |
 | **Phase 2** | Contract + `FakeRepo` + seed + Agent SDK + MCP tools + `runDispatch` (agent gán đúng) | ✅ **Done & verified** |
-| Phase 4 | `generate_document` (tectonic LaTeX) + `streamOut` realtime + `EncoreRepo` | ⬜ Chưa |
+| **Phase 3** | Dispatch API cho FE: `POST /dispatch/start` (chạy nền) + `GET /dispatch/status/:jobId` (polling) | ✅ **Done & verified (encore run)** |
+| Phase 4 | `generate_document` (tectonic LaTeX) + realtime + `EncoreRepo` (nối DB thật) | ⬜ Chưa |
 
 ---
 
@@ -71,25 +72,63 @@ node ai-engine/scripts/smoke.ts "câu hỏi"  # prompt tuỳ ý
 - [x] `npm i @anthropic-ai/claude-agent-sdk@0.3.195 zod@4`
 - [x] `ai-engine/dispatch/tools.ts` — `createDispatchServer(repo, log)`: `get_todo_tasks`, `get_members`, `assign_task`, `claim_task`
 - [x] `ai-engine/dispatch/run.ts` — `runDispatch(repo, onLog)`: `query()` với MCP server, `permissionMode:"bypassPermissions"` + `allowDangerouslySkipPermissions:true`, **KHÔNG** set API key (Pro quota). Model mặc định `claude-sonnet-4-6` (override `DISPATCH_MODEL`)
-- [x] `ai-engine/dispatch/test-local.ts` — chạy agent vs FakeRepo + **assertion tự động**
-- [x] `package.json` — script `test:dispatch`
+- [x] `ai-engine/dispatch/board-view.ts` — `renderBoard()` vẽ bảng Kanban ASCII (4 cột todo/in_progress/review/done) để "nhìn thấy" card chạy trong terminal
+- [x] `ai-engine/dispatch/expected.json` — **kỳ vọng phân công** (source of truth bài test); `assignee` = id member / `"ai-agent"` / mảng lựa chọn chấp nhận được; `expectNoTodoLeft`
+- [x] `ai-engine/dispatch/check-expected.ts` — `checkExpected()` so khớp state thực tế ↔ expected, trả `✓/✗` từng task
+- [x] `ai-engine/dispatch/test-local.ts` — chạy agent vs FakeRepo → in **bảng trước/sau** + **so khớp expected.json** (exit code 1 nếu lệch)
+- [x] `package.json` — `npm test` và `npm run test:dispatch` đều chạy bài này (vitest cũ chuyển sang `npm run test:unit`)
 
 ### Test đã chạy
-- [x] `npm run test:dispatch` → **PASS** (~47s, model sonnet-4-6)
-  - #5,#6 → 🤖 AI `claim`
-  - #1→An (Content), #2→Dũng (Designer), #3→Chi (Ads), #4→Em (Sales)
-  - Không còn task `todo`; 3/3 assertion xanh
+- [x] `npm test` → **PASS 7/7 khớp** (~46s, model sonnet-4-6)
+  - #1→An (m1), #2→Dũng (m4), #3→Chi (m3), #4→Em (m5) — đúng chuyên môn
+  - #5,#6 → 🤖 AI `claim` (in-scope report/slide)
+  - Không còn task `todo`
+  - Bảng Kanban ASCII: cột TODO → rỗng, IN PROGRESS → đầy đủ assignee
 
 ### Cách verify manual
 ```bash
 cd budde
-npm run test:dispatch                                   # mặc định sonnet-4-6
-DISPATCH_MODEL=claude-opus-4-8 npm run test:dispatch     # đổi model (PowerShell: $env:DISPATCH_MODEL='claude-opus-4-8'; npm run test:dispatch)
+npm test                                # chạy agent thật → in bảng + so khớp expected.json
+# đổi model:
+#   PowerShell: $env:DISPATCH_MODEL='claude-opus-4-8'; npm test; Remove-Item Env:DISPATCH_MODEL
+#   bash:       DISPATCH_MODEL=claude-opus-4-8 npm test
 ```
-Đọc khối **KIỂM TRA** cuối output: cả 3 dòng `✓` + `✓✓ PASS` = đạt.
-Soi `[agent] reason=...` để biết vì sao agent chọn member đó (chỉnh prompt trong `run.ts` nếu lệch).
+Đọc output theo thứ tự: **BẢNG TRƯỚC** (mọi task ở todo) → **`[agent] ...`** (suy luận + lý do) → **BẢNG SAU** (card nhảy sang in_progress) → **SO KHỚP** (`✓/✗` từng task vs expected.json) → `✓✓ PASS` / `✗ FAIL`.
 
-**Test atomic (chống gán đè khi bấm Start 2 lần):** chạy `test:dispatch` 2 lần trên cùng tiến trình không tái hiện được (mỗi lần seed mới), nhưng atomic đã được FakeRepo enforce (`status!=='todo' → false`) và agent log `✗ ... thất bại` nếu gặp.
+**Bài test hồi quy:** sửa `seed.json` + `expected.json` cho khớp ý → `npm test`. Agent gán lệch expected → dòng `✗ #id: got=X expected=Y` + exit 1. Chỉnh prompt trong `run.ts` hoặc nới `assignee` thành mảng.
+
+**Test atomic (chống gán đè):** mỗi lần chạy seed mới nên không tái hiện trực tiếp; atomic đã được FakeRepo enforce (`status!=='todo' → false`), agent log `✗ ... thất bại` nếu gặp task đã bị giữ.
+
+## Phase 3 — Dispatch API cho FE (start + polling) ✅
+
+> Pattern "1 nút bấm": FE bấm → `start` chạy agent **nền** → FE **poll** status để vẽ board "xoay xoay". Chọn polling thay streamOut vì đơn giản & ổn định hơn cho hackathon.
+
+### Code đã viết
+- [x] `ai-engine/dispatch/job-store.ts` — job store in-memory (`DispatchJob`: status/logs/tasks-snapshot/summary). Đủ cho localhost; Phase scale → Postgres/Pub-Sub, API giữ nguyên
+- [x] `ai-engine/dispatch-api.ts` — 2 endpoint Encore:
+  - `POST /dispatch/start` → tạo job, **fire-and-forget** `runDispatch` (không await), trả `{ jobId }` ngay
+  - `GET /dispatch/status/:jobId` → `{ status, logs[], tasks[] (board snapshot), summary }`; 404 nếu job lạ
+- [x] `fake-repo.ts` — seed path robust (chạy được cả `node` lẫn `encore run`, fallback theo cwd)
+- [x] `onLog` callback vừa push `logs` vừa `repo.dump()` → board cập nhật mỗi bước
+
+### Test đã chạy (qua `encore run`, port 4001)
+- [x] `POST /dispatch/start` → trả `{status:"running", jobId}` **tức thì** (non-blocking)
+- [x] Poll `GET /dispatch/status/:jobId` thấy board chuyển dần: `todo 6→2→0`, `in_progress 0→4→6`, `logs` tăng dần
+- [x] `status` chuyển `running → done`; board cuối gán đúng (#1→m1, #2→m4, #3→m3, #4→m5, #5/#6→ai-agent)
+- [x] `logs[]` chứa suy luận agent (cho panel FE); `summary` đầy đủ
+- [x] Job lạ → HTTP 404
+
+### Hợp đồng cho FE (polling pattern)
+```
+1. Bấm "Start"  → POST /dispatch/start            → nhận { jobId }
+2. setInterval(~1s):
+     GET /dispatch/status/{jobId}
+       → vẽ board từ `tasks[]` (group theo status), append `logs[]`
+       → nếu assigneeId === "ai-agent" gắn nhãn 🤖
+3. Khi status !== "running" → clearInterval, hiện `summary` (status "done") / `error`
+```
+
+> ⚠️ Hiện dùng `FakeRepo` (seed) — mỗi lần start là 1 board mới reset. Phase 4 đổi `makeFakeRepo()` → `encoreRepo` (DB thật) trong `dispatch-api.ts`, mọi thứ khác giữ nguyên.
 
 ## Phase 4 — Self-serve LaTeX + Streaming + Encore ⬜
 - [ ] Cài + warm-cache `tectonic`; template `report.tex` / `slides.tex` (`%%TITLE%%`, `%%BODY%%`)

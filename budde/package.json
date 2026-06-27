@@ -6,7 +6,8 @@
   "license": "MPL-2.0",
   "type": "module",
   "scripts": {
-    "test": "vitest --passWithNoTests",
+    "test": "node ai-engine/dispatch/test-local.ts",
+    "test:unit": "vitest --passWithNoTests",
     "gen": "encore gen client --output=./frontend/app/lib/client.ts --env=local",
     "smoke:claude": "node ai-engine/scripts/smoke.ts",
     "test:dispatch": "node ai-engine/dispatch/test-local.ts"

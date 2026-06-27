@@ -5,7 +5,9 @@
  * Atomic semantics: assignTask/claimTask chỉ thành công khi task còn 'todo'
  * → gọi lần 2 trả false (chống gán đè khi bấm Start nhiều lần).
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import type {
   DispatchRepository,
   KanbanTask,
@@ -18,9 +20,18 @@ interface Seed {
   tasks: KanbanTask[];
 }
 
+/**
+ * Resolve seed.json chạy được cả khi `node` (cạnh module) lẫn `encore run`
+ * (bundle có thể không copy JSON → fallback theo cwd = app root).
+ */
+function seedPath(): string {
+  const byModule = fileURLToPath(new URL("./seed.json", import.meta.url));
+  if (existsSync(byModule)) return byModule;
+  return join(process.cwd(), "ai-engine", "dispatch", "seed.json");
+}
+
 function loadSeed(): Seed {
-  const raw = readFileSync(new URL("./seed.json", import.meta.url), "utf8");
-  return JSON.parse(raw) as Seed;
+  return JSON.parse(readFileSync(seedPath(), "utf8")) as Seed;
 }
 
 export interface FakeRepo extends DispatchRepository {

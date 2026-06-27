@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { fetchSession, logout, type User } from "../lib/auth";
+import { fetchSession, getToken, logout, type User } from "../lib/auth";
 
 interface Profile {
   id: string;
@@ -60,7 +60,9 @@ export default function ProfilesPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/profile");
+      const res = await fetch("/profile", {
+        headers: { Authorization: `Bearer ${getToken() ?? ""}` },
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data: ListResponse = await res.json();
       setProfiles(data.profiles ?? []);
@@ -95,7 +97,10 @@ export default function ProfilesPage() {
     try {
       const res = await fetch("/profile", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken() ?? ""}`,
+        },
         body: JSON.stringify(form),
       });
       if (!res.ok) {

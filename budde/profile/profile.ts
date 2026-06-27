@@ -98,7 +98,7 @@ async function saveProfile(p: UpsertRequest): Promise<ProfileResponse> {
 }
 
 export const list = api(
-  { expose: true, method: "GET", path: "/profile" },
+  { expose: true, auth: true, method: "GET", path: "/profile" },
   async (): Promise<ListProfilesResponse> => {
     const rows = db.query<ProfileRow>`
       SELECT id, user_id, full_name, email, role, description, created_at, updated_at
@@ -112,12 +112,12 @@ export const list = api(
 );
 
 export const create = api(
-  { expose: true, method: "POST", path: "/profile" },
+  { expose: true, auth: true, method: "POST", path: "/profile" },
   async (p: UpsertRequest): Promise<ProfileResponse> => saveProfile(p),
 );
 
 export const get = api(
-  { expose: true, method: "GET", path: "/profile/:id" },
+  { expose: true, auth: true, method: "GET", path: "/profile/:id" },
   async ({ id }: ProfileParams): Promise<ProfileResponse> => {
     const row = await loadProfileByID(id);
     if (!row) throw APIError.notFound("profile not found");
@@ -126,7 +126,7 @@ export const get = api(
 );
 
 export const update = api(
-  { expose: true, method: "PUT", path: "/profile/:id" },
+  { expose: true, auth: true, method: "PUT", path: "/profile/:id" },
   async ({ id, ...p }: ProfileParams & UpsertRequest): Promise<ProfileResponse> =>
     saveProfile({ ...p, id }),
 );

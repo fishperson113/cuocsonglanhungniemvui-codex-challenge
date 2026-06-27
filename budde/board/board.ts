@@ -145,7 +145,7 @@ async function getTaskById(id: number): Promise<KanbanTask> {
 }
 
 export const listTasks = api<ListTasksRequest, ListTasksResponse>(
-  { expose: true, method: "GET", path: "/tasks" },
+  { expose: true, auth: true, method: "GET", path: "/tasks" },
   async ({ status }) => {
     if (status && !STATUSES.includes(status)) throw APIError.invalidArgument("invalid task status");
 
@@ -177,7 +177,7 @@ export const listTasks = api<ListTasksRequest, ListTasksResponse>(
 );
 
 export const listMembers = api<void, ListMembersResponse>(
-  { expose: true, method: "GET", path: "/members" },
+  { expose: true, auth: true, method: "GET", path: "/members" },
   async () => {
     const members: Member[] = [];
     const rows = db.query<MemberRow>`
@@ -201,7 +201,7 @@ export const listMembers = api<void, ListMembersResponse>(
 );
 
 export const createTask = api<CreateTaskRequest, KanbanTask>(
-  { expose: true, method: "POST", path: "/tasks" },
+  { expose: true, auth: true, method: "POST", path: "/tasks" },
   async (req) => {
     const title = req.title.trim();
     if (!title) throw APIError.invalidArgument("title is required");
@@ -230,7 +230,7 @@ export const createTask = api<CreateTaskRequest, KanbanTask>(
 );
 
 export const updateTask = api<UpdateTaskRequest, KanbanTask>(
-  { expose: true, method: "PATCH", path: "/tasks/:id" },
+  { expose: true, auth: true, method: "PATCH", path: "/tasks/:id" },
   async (req) => {
     const existing = await getTaskById(req.id);
     const title = req.title === undefined ? existing.title : req.title.trim();
@@ -262,7 +262,7 @@ export const updateTask = api<UpdateTaskRequest, KanbanTask>(
 );
 
 export const assignTask = api<AssignTaskRequest, WriteResponse>(
-  { expose: true, method: "PATCH", path: "/tasks/:id/assign" },
+  { expose: true, auth: true, method: "PATCH", path: "/tasks/:id/assign" },
   async ({ id, memberId }) => {
     const row = await db.queryRow<TaskRow>`
       UPDATE tasks

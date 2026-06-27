@@ -6,7 +6,7 @@
  */
 import { api } from "encore.dev/api";
 import log from "encore.dev/log";
-import { runClaude } from "./claude/cli";
+import { runClaude } from "./openai/cli";
 
 export interface AskRequest {
   /** Prompt gửi cho claude CLI. */

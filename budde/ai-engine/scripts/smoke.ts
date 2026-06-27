@@ -8,7 +8,7 @@
  * Pass khi: in ra event `result`, isError=false, và có text trả lời.
  * Đồng thời verify đang dùng quota Pro (cost ~0, không bị đòi API key).
  */
-import { runClaude } from "../claude/cli.ts";
+import { runClaude } from "../openai/cli.ts";
 
 const prompt = process.argv[2] ?? "Reply with exactly one word: ping";
 

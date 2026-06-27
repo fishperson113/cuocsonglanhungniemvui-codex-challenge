@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { DragEvent } from "react";
 import {
   ArrowPathIcon,
-  ArrowRightIcon,
   LinkIcon,
   PencilSquareIcon,
   PlusIcon,
@@ -63,9 +63,6 @@ function labelsFromInput(value: string): string[] {
     .filter(Boolean);
 }
 
-function statusIndex(status: TaskStatus): number {
-  return STATUSES.findIndex((item) => item.id === status);
-}
 
 export default function App() {
   const [tasks, setTasks] = useState<KanbanTask[]>([]);
@@ -77,6 +74,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<TaskForm>(EMPTY_FORM);
+  const [draggingTaskId, setDraggingTaskId] = useState<number | null>(null);
+  const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
+  const [savingTaskIds, setSavingTaskIds] = useState<number[]>([]);
 
   const membersById = useMemo(() => {
     const index = new Map<string, Member>();
@@ -157,17 +157,64 @@ export default function App() {
     }
   }
 
-  async function moveTask(task: KanbanTask, status: TaskStatus) {
+  async function moveTask(taskId: number, status: TaskStatus) {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task || task.status === status || savingTaskIds.includes(taskId)) return;
+
+    const previousStatus = task.status;
     setError(null);
+    setSavingTaskIds((current) => (current.includes(taskId) ? current : [...current, taskId]));
+    setTasks((current) =>
+      current.map((item) => (item.id === taskId ? { ...item, status } : item)),
+    );
+
     try {
-      const updated = await apiJSON<KanbanTask>(`/tasks/${task.id}`, {
+      const updated = await apiJSON<KanbanTask>(`/tasks/${taskId}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
       upsertTask(updated);
     } catch (err) {
+      setTasks((current) =>
+        current.map((item) => (item.id === taskId ? { ...item, status: previousStatus } : item)),
+      );
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingTaskIds((current) => current.filter((id) => id !== taskId));
     }
+  }
+
+  function handleDragStart(event: DragEvent<HTMLElement>, taskId: number) {
+    if (savingTaskIds.includes(taskId)) return;
+    setDraggingTaskId(taskId);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(taskId));
+  }
+
+  function handleDragEnd() {
+    setDraggingTaskId(null);
+    setDragOverStatus(null);
+  }
+
+  function handleColumnDragOver(event: DragEvent<HTMLElement>, status: TaskStatus) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDragOverStatus(status);
+  }
+
+  function handleColumnDragLeave(event: DragEvent<HTMLElement>, status: TaskStatus) {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    setDragOverStatus((current) => (current === status ? null : current));
+  }
+
+  function handleColumnDrop(event: DragEvent<HTMLElement>, status: TaskStatus) {
+    event.preventDefault();
+    const droppedTaskId = Number(event.dataTransfer.getData("text/plain") || draggingTaskId);
+    setDraggingTaskId(null);
+    setDragOverStatus(null);
+    if (!Number.isInteger(droppedTaskId)) return;
+    void moveTask(droppedTaskId, status);
   }
 
   function applyDispatchEvent(event: DispatchEvent) {
@@ -266,8 +313,18 @@ export default function App() {
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {STATUSES.map((column) => {
               const columnTasks = tasks.filter((task) => task.status === column.id);
+              const isDragTarget = dragOverStatus === column.id && draggingTaskId !== null;
               return (
-                <section key={column.id} className="flex min-h-[520px] flex-col rounded-md border border-slate-300 bg-slate-200">
+                <section
+                  key={column.id}
+                  onDragOver={(event) => handleColumnDragOver(event, column.id)}
+                  onDragLeave={(event) => handleColumnDragLeave(event, column.id)}
+                  onDrop={(event) => handleColumnDrop(event, column.id)}
+                  className={[
+                    "flex min-h-[520px] flex-col rounded-md border bg-slate-200 transition-colors",
+                    isDragTarget ? "border-cyan-500 bg-cyan-50" : "border-slate-300",
+                  ].join(" ")}
+                >
                   <div className="flex items-center justify-between border-b border-slate-300 px-3 py-3">
                     <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">{column.title}</h2>
                     <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
@@ -287,8 +344,11 @@ export default function App() {
                           key={task.id}
                           task={task}
                           assignee={task.assigneeId ? membersById.get(task.assigneeId) : undefined}
+                          dragging={draggingTaskId === task.id}
+                          saving={savingTaskIds.includes(task.id)}
                           onEdit={() => openEditForm(task)}
-                          onMove={(status) => void moveTask(task, status)}
+                          onDragStart={(event) => handleDragStart(event, task.id)}
+                          onDragEnd={handleDragEnd}
                         />
                       ))
                     )}
@@ -407,21 +467,34 @@ export default function App() {
 function TaskCard({
   task,
   assignee,
+  dragging,
+  saving,
   onEdit,
-  onMove,
+  onDragStart,
+  onDragEnd,
 }: {
   task: KanbanTask;
   assignee?: Member;
+  dragging: boolean;
+  saving: boolean;
   onEdit: () => void;
-  onMove: (status: TaskStatus) => void;
+  onDragStart: (event: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
 }) {
-  const currentIndex = statusIndex(task.status);
-  const previous = currentIndex > 0 ? STATUSES[currentIndex - 1] : null;
-  const next = currentIndex < STATUSES.length - 1 ? STATUSES[currentIndex + 1] : null;
   const assigneeName = task.assigneeId === "ai-agent" ? "AI" : assignee?.name ?? "Unassigned";
 
   return (
-    <article className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+    <article
+      draggable={!saving}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      aria-busy={saving}
+      className={[
+        "rounded-md border bg-white p-3 shadow-sm transition",
+        saving ? "cursor-wait border-slate-200 opacity-70" : "cursor-grab border-slate-200 active:cursor-grabbing",
+        dragging ? "border-cyan-500 opacity-60 outline outline-2 outline-cyan-200" : "",
+      ].join(" ")}
+    >
       <div className="mb-2 flex items-start justify-between gap-2">
         <h3 className="text-sm font-semibold leading-5 text-slate-950">{task.title}</h3>
         <button
@@ -457,28 +530,6 @@ function TaskCard({
             <LinkIcon className="h-4 w-4" />
             Artifact
           </a>
-        ) : null}
-      </div>
-
-      <div className="mt-3 flex gap-2">
-        {previous ? (
-          <button
-            type="button"
-            onClick={() => onMove(previous.id)}
-            className="inline-flex h-8 flex-1 items-center justify-center rounded-md border border-slate-300 text-xs font-medium hover:bg-slate-50"
-          >
-            {previous.title}
-          </button>
-        ) : null}
-        {next ? (
-          <button
-            type="button"
-            onClick={() => onMove(next.id)}
-            className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-md border border-slate-300 text-xs font-medium hover:bg-slate-50"
-          >
-            {next.title}
-            <ArrowRightIcon className="h-3.5 w-3.5" />
-          </button>
         ) : null}
       </div>
     </article>

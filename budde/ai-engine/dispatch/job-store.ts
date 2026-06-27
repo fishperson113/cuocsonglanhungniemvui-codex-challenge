@@ -2,9 +2,10 @@
  * Job store in-memory cho dispatch chạy nền + polling.
  * Đủ cho localhost `encore run` (single process). Khi scale/deploy thật → thay bằng
  * Postgres hoặc Pub/Sub + bảng job; API polling giữ nguyên.
+ *
+ * Board state KHÔNG lưu ở đây — FE poll thẳng `/tasks` (DB là source of truth).
+ * Job chỉ giữ log suy luận agent + trạng thái + summary.
  */
-import type { KanbanTask } from "./contract.ts";
-
 export type JobStatus = "running" | "done" | "error";
 
 export interface DispatchJob {
@@ -14,8 +15,6 @@ export interface DispatchJob {
   finishedAt?: number;
   /** Log suy luận agent (FE render panel bên phải). */
   logs: string[];
-  /** Snapshot board hiện tại — cập nhật mỗi bước để FE vẽ card nhảy cột. */
-  tasks: KanbanTask[];
   /** Tóm tắt cuối khi xong. */
   summary?: string;
   error?: string;
@@ -23,13 +22,12 @@ export interface DispatchJob {
 
 const jobs = new Map<string, DispatchJob>();
 
-export function createJob(id: string, tasks: KanbanTask[]): DispatchJob {
+export function createJob(id: string): DispatchJob {
   const job: DispatchJob = {
     id,
     status: "running",
     startedAt: Date.now(),
     logs: [],
-    tasks,
   };
   jobs.set(id, job);
   return job;

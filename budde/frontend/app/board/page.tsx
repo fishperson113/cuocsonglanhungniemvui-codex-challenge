@@ -1,34 +1,22 @@
 "use client";
 
-<<<<<<< HEAD
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import type { DragEvent } from "react";
-import {
-  ArrowPathIcon,
-  LinkIcon,
-  PencilSquareIcon,
-  PlusIcon,
-  SparklesIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
-import type { DispatchEvent, KanbanTask, Member, TaskStatus } from "../../../shared/contract";
-=======
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchSession, logout, type User } from "../lib/auth";
 import {
   assignTask,
   createTask,
+  getDispatchStatus,
   joinBoard,
   listMembers,
   listTasks,
+  startDispatch,
   syncMembers,
   updateTaskStatus,
   type KanbanTask,
   type Member,
   type TaskStatus,
 } from "../lib/board";
->>>>>>> d3ec3d865e526638d41f4e4c8e60f793349b197e
 
 const COLUMNS: { status: TaskStatus; label: string; accent: string }[] = [
   { status: "todo", label: "To Do", accent: "from-slate-500 to-slate-600" },
@@ -65,28 +53,17 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-<<<<<<< HEAD
-
-export default function App() {
-=======
 export default function BoardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
->>>>>>> d3ec3d865e526638d41f4e4c8e60f793349b197e
   const [tasks, setTasks] = useState<KanbanTask[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [error, setError] = useState<string | null>(null);
-<<<<<<< HEAD
-  const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState<TaskForm>(EMPTY_FORM);
-  const [draggingTaskId, setDraggingTaskId] = useState<number | null>(null);
-  const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
-  const [savingTaskIds, setSavingTaskIds] = useState<number[]>([]);
-=======
   const [busy, setBusy] = useState(false);
   const [newTitle, setNewTitle] = useState("");
->>>>>>> d3ec3d865e526638d41f4e4c8e60f793349b197e
+  const [dispatching, setDispatching] = useState(false);
+  const [dispatchLogs, setDispatchLogs] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     try {
@@ -123,73 +100,55 @@ export default function BoardPage() {
     }
   }
 
-<<<<<<< HEAD
-  async function moveTask(taskId: number, status: TaskStatus) {
-    const task = tasks.find((item) => item.id === taskId);
-    if (!task || task.status === status || savingTaskIds.includes(taskId)) return;
-
-    const previousStatus = task.status;
+  // Bấm "AI điều phối" → start (chạy nền) → poll status (logs) + reload board mỗi 1.2s.
+  function handleDispatch() {
     setError(null);
-    setSavingTaskIds((current) => (current.includes(taskId) ? current : [...current, taskId]));
-    setTasks((current) =>
-      current.map((item) => (item.id === taskId ? { ...item, status } : item)),
-    );
+    setDispatching(true);
+    setDispatchLogs(["Đang khởi động AI điều phối..."]);
 
-    try {
-      const updated = await apiJSON<KanbanTask>(`/tasks/${taskId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
-      upsertTask(updated);
-    } catch (err) {
-      setTasks((current) =>
-        current.map((item) => (item.id === taskId ? { ...item, status: previousStatus } : item)),
-      );
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSavingTaskIds((current) => current.filter((id) => id !== taskId));
-    }
+    void (async () => {
+      try {
+        const jobId = await startDispatch();
+        let seen = 0;
+        const timer = window.setInterval(() => {
+          void (async () => {
+            try {
+              const job = await getDispatchStatus(jobId);
+
+              if (job.logs.length > seen) {
+                const fresh = job.logs.slice(seen);
+                seen = job.logs.length;
+                setDispatchLogs((current) => [...current, ...fresh].slice(-80));
+              }
+
+              // Board là DB thật — reload để card tự nhảy cột theo agent.
+              await load();
+
+              if (job.status !== "running") {
+                window.clearInterval(timer);
+                setDispatching(false);
+                if (job.summary) {
+                  setDispatchLogs((current) =>
+                    [...current, "— Hoàn tất —", job.summary as string].slice(-80),
+                  );
+                }
+                if (job.error) setError(job.error);
+                await load();
+              }
+            } catch (err) {
+              window.clearInterval(timer);
+              setDispatching(false);
+              setError(err instanceof Error ? err.message : String(err));
+            }
+          })();
+        }, 1200);
+      } catch (err) {
+        setDispatching(false);
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    })();
   }
 
-  function handleDragStart(event: DragEvent<HTMLElement>, taskId: number) {
-    if (savingTaskIds.includes(taskId)) return;
-    setDraggingTaskId(taskId);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", String(taskId));
-  }
-
-  function handleDragEnd() {
-    setDraggingTaskId(null);
-    setDragOverStatus(null);
-  }
-
-  function handleColumnDragOver(event: DragEvent<HTMLElement>, status: TaskStatus) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    setDragOverStatus(status);
-  }
-
-  function handleColumnDragLeave(event: DragEvent<HTMLElement>, status: TaskStatus) {
-    const nextTarget = event.relatedTarget;
-    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
-    setDragOverStatus((current) => (current === status ? null : current));
-  }
-
-  function handleColumnDrop(event: DragEvent<HTMLElement>, status: TaskStatus) {
-    event.preventDefault();
-    const droppedTaskId = Number(event.dataTransfer.getData("text/plain") || draggingTaskId);
-    setDraggingTaskId(null);
-    setDragOverStatus(null);
-    if (!Number.isInteger(droppedTaskId)) return;
-    void moveTask(droppedTaskId, status);
-  }
-
-  function applyDispatchEvent(event: DispatchEvent) {
-    if (event.type === "log") {
-      setLogs((current) => [...current, event.text].slice(-40));
-      return;
-    }
-=======
   const memberName = (id: string | null) => {
     if (!id) return null;
     if (id === "ai-agent") return "AI Agent";
@@ -197,7 +156,6 @@ export default function BoardPage() {
   };
 
   const isMember = user ? members.some((m) => m.id === user.id) : false;
->>>>>>> d3ec3d865e526638d41f4e4c8e60f793349b197e
 
   if (!authChecked) {
     return (
@@ -270,6 +228,14 @@ export default function BoardPage() {
           >
             Đồng bộ tất cả profile
           </button>
+          <button
+            disabled={busy || dispatching}
+            onClick={handleDispatch}
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-cyan-500/30 disabled:opacity-50"
+          >
+            <span className={dispatching ? "animate-pulse" : ""}>🤖</span>
+            {dispatching ? "Đang điều phối..." : "AI điều phối"}
+          </button>
 
           <div className="ml-auto flex flex-1 items-center gap-2 sm:flex-none">
             <input
@@ -299,29 +265,23 @@ export default function BoardPage() {
           </div>
         )}
 
-<<<<<<< HEAD
-        <section className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {STATUSES.map((column) => {
-              const columnTasks = tasks.filter((task) => task.status === column.id);
-              const isDragTarget = dragOverStatus === column.id && draggingTaskId !== null;
-              return (
-                <section
-                  key={column.id}
-                  onDragOver={(event) => handleColumnDragOver(event, column.id)}
-                  onDragLeave={(event) => handleColumnDragLeave(event, column.id)}
-                  onDrop={(event) => handleColumnDrop(event, column.id)}
-                  className={[
-                    "flex min-h-[520px] flex-col rounded-md border bg-slate-200 transition-colors",
-                    isDragTarget ? "border-cyan-500 bg-cyan-50" : "border-slate-300",
-                  ].join(" ")}
-                >
-                  <div className="flex items-center justify-between border-b border-slate-300 px-3 py-3">
-                    <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">{column.title}</h2>
-                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
-                      {columnTasks.length}
-                    </span>
-=======
+        {/* AI dispatch log panel */}
+        {(dispatching || dispatchLogs.length > 0) && (
+          <div className="mb-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 backdrop-blur-xl">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-cyan-300">
+              <span className={dispatching ? "animate-pulse" : ""}>●</span>
+              AI Dispatch {dispatching ? "đang chạy" : "đã xong"}
+            </div>
+            <div className="max-h-60 space-y-1 overflow-auto text-xs leading-relaxed text-slate-300">
+              {dispatchLogs.map((line, i) => (
+                <div key={i} className="whitespace-pre-wrap rounded bg-slate-900/50 px-2 py-1">
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* columns */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {COLUMNS.map((col) => {
@@ -335,7 +295,6 @@ export default function BoardPage() {
                   <div className="flex items-center gap-2">
                     <span className={`h-2.5 w-2.5 rounded-full bg-gradient-to-r ${col.accent}`} />
                     <span className="font-semibold text-white">{col.label}</span>
->>>>>>> d3ec3d865e526638d41f4e4c8e60f793349b197e
                   </div>
                   <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-300">
                     {colTasks.length}
@@ -349,26 +308,10 @@ export default function BoardPage() {
                     colTasks.map((task) => {
                       const next = NEXT_STATUS[task.status];
                       const assignee = memberName(task.assigneeId);
+                      const isAI = task.assigneeId === "ai-agent";
                       return (
                         <div
                           key={task.id}
-<<<<<<< HEAD
-                          task={task}
-                          assignee={task.assigneeId ? membersById.get(task.assigneeId) : undefined}
-                          dragging={draggingTaskId === task.id}
-                          saving={savingTaskIds.includes(task.id)}
-                          onEdit={() => openEditForm(task)}
-                          onDragStart={(event) => handleDragStart(event, task.id)}
-                          onDragEnd={handleDragEnd}
-                        />
-                      ))
-                    )}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
-=======
                           className="rounded-xl border border-white/10 bg-slate-900/60 p-3 transition-all hover:border-indigo-400/40"
                         >
                           <div className="mb-2 flex items-start justify-between gap-2">
@@ -377,7 +320,6 @@ export default function BoardPage() {
                               #{task.id}
                             </span>
                           </div>
->>>>>>> d3ec3d865e526638d41f4e4c8e60f793349b197e
 
                           {task.labels.length > 0 && (
                             <div className="mb-2 flex flex-wrap gap-1">
@@ -396,11 +338,11 @@ export default function BoardPage() {
                             {assignee ? (
                               <div className="flex items-center gap-1.5">
                                 <div
-                                  className={`flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br ${avatarColor(
-                                    task.assigneeId ?? "x",
-                                  )} text-[10px] font-semibold text-white`}
+                                  className={`flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br ${
+                                    isAI ? "from-cyan-500 to-indigo-600" : avatarColor(task.assigneeId ?? "x")
+                                  } text-[10px] font-semibold text-white`}
                                 >
-                                  {initials(assignee)}
+                                  {isAI ? "🤖" : initials(assignee)}
                                 </div>
                                 <span className="text-xs text-slate-400">{assignee}</span>
                               </div>
@@ -435,6 +377,17 @@ export default function BoardPage() {
                               </button>
                             )}
                           </div>
+
+                          {task.artifactUrl && (
+                            <a
+                              href={task.artifactUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-2 inline-block text-xs font-medium text-cyan-400 hover:text-cyan-300"
+                            >
+                              ↗ Xem artifact
+                            </a>
+                          )}
                         </div>
                       );
                     })
@@ -444,84 +397,7 @@ export default function BoardPage() {
             );
           })}
         </div>
-<<<<<<< HEAD
-      ) : null}
-    </main>
-  );
-}
-
-function TaskCard({
-  task,
-  assignee,
-  dragging,
-  saving,
-  onEdit,
-  onDragStart,
-  onDragEnd,
-}: {
-  task: KanbanTask;
-  assignee?: Member;
-  dragging: boolean;
-  saving: boolean;
-  onEdit: () => void;
-  onDragStart: (event: DragEvent<HTMLElement>) => void;
-  onDragEnd: () => void;
-}) {
-  const assigneeName = task.assigneeId === "ai-agent" ? "AI" : assignee?.name ?? "Unassigned";
-
-  return (
-    <article
-      draggable={!saving}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      aria-busy={saving}
-      className={[
-        "rounded-md border bg-white p-3 shadow-sm transition",
-        saving ? "cursor-wait border-slate-200 opacity-70" : "cursor-grab border-slate-200 active:cursor-grabbing",
-        dragging ? "border-cyan-500 opacity-60 outline outline-2 outline-cyan-200" : "",
-      ].join(" ")}
-    >
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold leading-5 text-slate-950">{task.title}</h3>
-        <button
-          type="button"
-          onClick={onEdit}
-          className="shrink-0 rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-        >
-          <PencilSquareIcon className="h-4 w-4" />
-        </button>
-      </div>
-      <p className="line-clamp-3 text-sm leading-5 text-slate-600">{task.description}</p>
-
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {task.labels.map((label) => (
-          <span key={label} className="rounded bg-cyan-50 px-2 py-0.5 text-xs font-medium text-cyan-800">
-            {label}
-          </span>
-        ))}
-      </div>
-
-      <div className="mt-3 grid gap-2 text-xs text-slate-600">
-        <div className="flex items-center justify-between">
-          <span>{assigneeName}</span>
-          <span className="font-medium text-slate-800">{PRIORITY_LABELS[task.priority] ?? "Medium"}</span>
-        </div>
-        {task.artifactUrl ? (
-          <a
-            href={task.artifactUrl}
-            className="inline-flex items-center gap-1 font-medium text-cyan-700 hover:text-cyan-600"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <LinkIcon className="h-4 w-4" />
-            Artifact
-          </a>
-        ) : null}
-      </div>
-    </article>
-=======
       </div>
     </div>
->>>>>>> d3ec3d865e526638d41f4e4c8e60f793349b197e
   );
 }

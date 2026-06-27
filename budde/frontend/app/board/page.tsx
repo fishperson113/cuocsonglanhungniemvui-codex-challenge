@@ -6,6 +6,7 @@ import type { DragEvent, FormEvent } from "react";
 import {
   ArrowPathIcon,
   ArrowRightIcon,
+  EyeIcon,
   LinkIcon,
   PlusIcon,
   UserPlusIcon,
@@ -20,7 +21,6 @@ import {
   listMembers,
   listTasks,
   startDispatch,
-  syncMembers,
   updateTaskStatus,
   type KanbanTask,
   type Member,
@@ -139,6 +139,7 @@ export default function BoardPage() {
   }
 
   async function moveTask(taskId: number, status: TaskStatus) {
+    if (!isMember) return;
     const task = tasks.find((item) => item.id === taskId);
     if (!task || task.status === status || savingTaskIds.includes(taskId)) return;
 
@@ -164,6 +165,7 @@ export default function BoardPage() {
 
   function handleDispatch() {
     if (dispatching) return;
+    if (!isMember) return;
 
     setError(null);
     setDispatching(true);
@@ -213,6 +215,7 @@ export default function BoardPage() {
   }
 
   function handleDragStart(event: DragEvent<HTMLElement>, taskId: number) {
+    if (!isMember) return;
     if (savingTaskIds.includes(taskId)) return;
     setDraggingTaskId(taskId);
     event.dataTransfer.effectAllowed = "move";
@@ -225,6 +228,7 @@ export default function BoardPage() {
   }
 
   function handleColumnDragOver(event: DragEvent<HTMLElement>, status: TaskStatus) {
+    if (!isMember) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     setDragOverStatus(status);
@@ -237,6 +241,7 @@ export default function BoardPage() {
   }
 
   function handleColumnDrop(event: DragEvent<HTMLElement>, status: TaskStatus) {
+    if (!isMember) return;
     event.preventDefault();
     const rawTaskId = event.dataTransfer.getData("text/plain") || String(draggingTaskId ?? "");
     const droppedTaskId = Number(rawTaskId);
@@ -248,6 +253,7 @@ export default function BoardPage() {
 
   async function submitTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isMember) return;
     const title = newTitle.trim();
     if (!title) return;
 
@@ -327,62 +333,60 @@ export default function BoardPage() {
         <section className="mb-6 rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
           <div className="flex flex-wrap items-center gap-3">
             {!isMember ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void withBusy(async () => void (await joinBoard()))}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 disabled:opacity-50"
-              >
-                <UserPlusIcon className="h-4 w-4" />
-                Join board
-              </button>
-            ) : null}
+              <>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void withBusy(async () => void (await joinBoard()))}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 disabled:opacity-50"
+                >
+                  <UserPlusIcon className="h-4 w-4" />
+                  Join board
+                </button>
+                <span className="inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+                  <EyeIcon className="h-4 w-4" />
+                  View only — join board to edit
+                </span>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={busy || dispatching}
+                  onClick={handleDispatch}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-cyan-500/30 disabled:opacity-50"
+                >
+                  <span className={dispatching ? "animate-pulse" : ""}>🤖</span>
+                  {dispatching ? "Đang điều phối..." : "AI điều phối"}
+                </button>
 
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void withBusy(async () => void (await syncMembers()))}
-              className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
-            >
-              <ArrowPathIcon className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
-              Sync profiles
-            </button>
-
-            <button
-              type="button"
-              disabled={busy || dispatching}
-              onClick={handleDispatch}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-cyan-500/30 disabled:opacity-50"
-            >
-              <span className={dispatching ? "animate-pulse" : ""}>🤖</span>
-              {dispatching ? "Đang điều phối..." : "AI điều phối"}
-            </button>
-
-            <form
-              onSubmit={submitTask}
-              className="ml-auto grid flex-1 gap-2 sm:min-w-[420px] sm:grid-cols-[1fr_1fr_auto]"
-            >
-              <input
-                value={newTitle}
-                onChange={(event) => setNewTitle(event.target.value)}
-                placeholder="New task title"
-                className={inputClass}
-              />
-              <input
-                value={newDescription}
-                onChange={(event) => setNewDescription(event.target.value)}
-                placeholder="Description"
-                className={inputClass}
-              />
-              <button
-                type="submit"
-                disabled={busy || !newTitle.trim()}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
-              >
-                <PlusIcon className="h-4 w-4" />
-                Add
-              </button>
-            </form>
+                <form
+                  onSubmit={submitTask}
+                  className="ml-auto grid flex-1 gap-2 sm:min-w-[420px] sm:grid-cols-[1fr_1fr_auto]"
+                >
+                  <input
+                    value={newTitle}
+                    onChange={(event) => setNewTitle(event.target.value)}
+                    placeholder="New task title"
+                    className={inputClass}
+                  />
+                  <input
+                    value={newDescription}
+                    onChange={(event) => setNewDescription(event.target.value)}
+                    placeholder="Description"
+                    className={inputClass}
+                  />
+                  <button
+                    type="submit"
+                    disabled={busy || !newTitle.trim()}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Add
+                  </button>
+                </form>
+              </>
+            )}
           </div>
         </section>
 
@@ -449,6 +453,7 @@ export default function BoardPage() {
                         task={task}
                         members={members}
                         assignee={task.assigneeId ? membersById.get(task.assigneeId) : undefined}
+                        canEdit={isMember}
                         dragging={draggingTaskId === task.id}
                         saving={savingTaskIds.includes(task.id)}
                         busy={busy}
@@ -475,6 +480,7 @@ function TaskCard({
   task,
   members,
   assignee,
+  canEdit,
   dragging,
   saving,
   busy,
@@ -486,6 +492,7 @@ function TaskCard({
   task: KanbanTask;
   members: Member[];
   assignee?: Member;
+  canEdit: boolean;
   dragging: boolean;
   saving: boolean;
   busy: boolean;
@@ -500,13 +507,13 @@ function TaskCard({
 
   return (
     <article
-      draggable={!saving}
+      draggable={canEdit && !saving}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       aria-busy={saving}
       className={[
         "rounded-xl border border-white/10 bg-slate-900/70 p-3 transition-all hover:border-indigo-400/40",
-        saving ? "cursor-wait opacity-70" : "cursor-grab active:cursor-grabbing",
+        !canEdit ? "cursor-default" : saving ? "cursor-wait opacity-70" : "cursor-grab active:cursor-grabbing",
         dragging ? "border-cyan-400 opacity-60 outline outline-2 outline-cyan-400/30" : "",
       ].join(" ")}
     >
@@ -550,7 +557,7 @@ function TaskCard({
               </div>
               <span className="truncate">{assigneeName}</span>
             </div>
-          ) : (
+          ) : canEdit ? (
             <select
               disabled={busy || saving}
               defaultValue=""
@@ -566,6 +573,8 @@ function TaskCard({
                 </option>
               ))}
             </select>
+          ) : (
+            <span className="text-xs text-slate-500">Unassigned</span>
           )}
 
           <span className="shrink-0 font-medium text-slate-300">
@@ -591,9 +600,9 @@ function TaskCard({
           {nextStatus ? (
             <button
               type="button"
-              disabled={busy || saving}
+              disabled={!canEdit || busy || saving}
               onClick={() => onAdvance(nextStatus)}
-              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-xs text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:hover:bg-transparent"
             >
               <ArrowRightIcon className="h-3.5 w-3.5" />
               {COLUMNS.find((column) => column.status === nextStatus)?.label}

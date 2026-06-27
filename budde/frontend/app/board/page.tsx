@@ -11,6 +11,7 @@ import {
   UserPlusIcon,
 } from "@heroicons/react/24/outline";
 import { fetchSession, logout, type User } from "../lib/auth";
+import NavTabs from "../components/NavTabs";
 import {
   assignTask,
   createTask,
@@ -19,7 +20,6 @@ import {
   listMembers,
   listTasks,
   startDispatch,
-  syncMembers,
   updateTaskStatus,
   type KanbanTask,
   type Member,
@@ -292,32 +292,34 @@ export default function BoardPage() {
               Shared workspace - {members.length} members - {tasks.length} tasks
             </p>
           </div>
-
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-xl">
-            {user ? (
-              <div className="flex items-center gap-2">
-                <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ${avatarColor(
-                    user.email,
-                  )} text-sm font-semibold text-white`}
-                >
-                  {initials(user.name)}
-                </div>
-                <div className="hidden sm:block">
-                  <div className="text-sm font-medium text-white">{user.name}</div>
-                  <div className="text-xs text-slate-400">
-                    {isMember ? "Board member" : "Not joined"}
+          <div className="flex flex-wrap items-center gap-3">
+            <NavTabs />
+            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-xl">
+              {user && (
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br ${avatarColor(
+                      user.email,
+                    )} text-sm font-semibold text-white`}
+                  >
+                    {initials(user.name)}
+                  </div>
+                  <div className="hidden sm:block">
+                    <div className="text-sm font-medium text-white">{user.name}</div>
+                    <div className="text-xs text-slate-400">
+                      {isMember ? "Board member" : "Not joined"}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : null}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-            >
-              Log out
-            </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                Log out
+              </button>
+            </div>
           </div>
         </header>
 
@@ -344,15 +346,21 @@ export default function BoardPage() {
               <ArrowPathIcon className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
               Sync profiles
             </button>
-
+          )}
             <button
-              type="button"
+              disabled={busy}
+              onClick={() => withBusy(async () => void (await syncMembers()))}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+            >
+              Đồng bộ tất cả profile
+            </button>
+            <button
               disabled={busy || dispatching}
               onClick={handleDispatch}
               className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-cyan-500/30 disabled:opacity-50"
             >
-              <span className={dispatching ? "animate-pulse" : ""}>AI</span>
-              {dispatching ? "Dispatching..." : "AI dispatch"}
+              <span className={dispatching ? "animate-pulse" : ""}>🤖</span>
+              {dispatching ? "Đang điều phối..." : "AI điều phối"}
             </button>
 
             <form

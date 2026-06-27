@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchSession, getToken, logout, type User } from "../lib/auth";
+import NavTabs from "../components/NavTabs";
 
 interface Profile {
   id: string;
@@ -147,7 +148,9 @@ export default function ProfilesPage() {
             </h1>
             <p className="mt-1 text-sm text-slate-400">Quản lý hồ sơ người dùng</p>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-xl">
+          <div className="flex flex-wrap items-center gap-3">
+            <NavTabs />
+            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-xl">
             {user && (
               <>
                 <div
@@ -169,6 +172,7 @@ export default function ProfilesPage() {
             >
               Đăng xuất
             </button>
+            </div>
           </div>
         </header>
 

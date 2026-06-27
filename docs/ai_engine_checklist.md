@@ -8,8 +8,7 @@
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
 | **Phase 1** | Wrapper subprocess `claude` CLI + smoke test | ✅ **Done & verified** |
-| Phase 2 | Contract `DispatchRepository` + `FakeRepo` + `seed.json` | ⬜ Chưa |
-| Phase 3 | Agent SDK + MCP tools + `runDispatch` (tool-use loop) | ⬜ Chưa |
+| **Phase 2** | Contract + `FakeRepo` + seed + Agent SDK + MCP tools + `runDispatch` (agent gán đúng) | ✅ **Done & verified** |
 | Phase 4 | `generate_document` (tectonic LaTeX) + `streamOut` realtime + `EncoreRepo` | ⬜ Chưa |
 
 ---
@@ -61,17 +60,36 @@ node ai-engine/scripts/smoke.ts "câu hỏi"  # prompt tuỳ ý
 
 ---
 
-## Phase 2 — Contract + FakeRepo ⬜ (next)
-- [ ] `shared/contract.ts`: `Member`, `KanbanTask`, `TaskStatus`, `DispatchRepository`, `DispatchEvent`
-- [ ] `ai-engine/dispatch/seed.json`: 5 member + 6 task (4 dispatch + 2 in-scope report/slide)
-- [ ] `ai-engine/dispatch/fake-repo.ts`: `makeFakeRepo()` in-memory, `assignTask`/`claimTask` atomic (gọi 2 lần lần 2 = false)
-- [ ] Test: `assignTask` gọi 2 lần → lần 2 trả `false`
+## Phase 2 — Contract + FakeRepo + Agent loop ✅
 
-## Phase 3 — Agent loop (Agent SDK + MCP tools) ⬜
-- [ ] `npm i @anthropic-ai/claude-agent-sdk zod`
-- [ ] `dispatch/tools.ts`: `createDispatchServer(repo, log)` với tools `get_todo_tasks`, `get_members`, `assign_task`, `claim_task`
-- [ ] `dispatch/run.ts`: `runDispatch(repo, onLog)` — `query()` với `permissionMode: "bypassPermissions"`, **KHÔNG** set `ANTHROPIC_API_KEY`
-- [ ] `dispatch/test-local.ts`: chạy agent vs `FakeRepo`, kiểm matching đúng chuyên môn + phân loại in-scope
+> Gộp luôn agent loop (milestone Phase 3/B2) vì mục tiêu là "agent gán đúng từ seed".
+
+### Code đã viết
+- [x] `ai-engine/dispatch/contract.ts` — `Member`, `KanbanTask`, `TaskStatus`, `DispatchRepository`, `DispatchEvent` (single source of truth)
+- [x] `ai-engine/dispatch/seed.json` — 5 member (Content/SEO/Ads/Designer/Sales) + 6 task todo (`assigneeId=null`), trong đó #5 report + #6 slide là in-scope của AI
+- [x] `ai-engine/dispatch/fake-repo.ts` — `makeFakeRepo()` in-memory, `assignTask`/`claimTask` **atomic** (chỉ khi `status='todo'`, lần 2 → false) + `dump()` để soi state
+- [x] `npm i @anthropic-ai/claude-agent-sdk@0.3.195 zod@4`
+- [x] `ai-engine/dispatch/tools.ts` — `createDispatchServer(repo, log)`: `get_todo_tasks`, `get_members`, `assign_task`, `claim_task`
+- [x] `ai-engine/dispatch/run.ts` — `runDispatch(repo, onLog)`: `query()` với MCP server, `permissionMode:"bypassPermissions"` + `allowDangerouslySkipPermissions:true`, **KHÔNG** set API key (Pro quota). Model mặc định `claude-sonnet-4-6` (override `DISPATCH_MODEL`)
+- [x] `ai-engine/dispatch/test-local.ts` — chạy agent vs FakeRepo + **assertion tự động**
+- [x] `package.json` — script `test:dispatch`
+
+### Test đã chạy
+- [x] `npm run test:dispatch` → **PASS** (~47s, model sonnet-4-6)
+  - #5,#6 → 🤖 AI `claim`
+  - #1→An (Content), #2→Dũng (Designer), #3→Chi (Ads), #4→Em (Sales)
+  - Không còn task `todo`; 3/3 assertion xanh
+
+### Cách verify manual
+```bash
+cd budde
+npm run test:dispatch                                   # mặc định sonnet-4-6
+DISPATCH_MODEL=claude-opus-4-8 npm run test:dispatch     # đổi model (PowerShell: $env:DISPATCH_MODEL='claude-opus-4-8'; npm run test:dispatch)
+```
+Đọc khối **KIỂM TRA** cuối output: cả 3 dòng `✓` + `✓✓ PASS` = đạt.
+Soi `[agent] reason=...` để biết vì sao agent chọn member đó (chỉnh prompt trong `run.ts` nếu lệch).
+
+**Test atomic (chống gán đè khi bấm Start 2 lần):** chạy `test:dispatch` 2 lần trên cùng tiến trình không tái hiện được (mỗi lần seed mới), nhưng atomic đã được FakeRepo enforce (`status!=='todo' → false`) và agent log `✗ ... thất bại` nếu gặp.
 
 ## Phase 4 — Self-serve LaTeX + Streaming + Encore ⬜
 - [ ] Cài + warm-cache `tectonic`; template `report.tex` / `slides.tex` (`%%TITLE%%`, `%%BODY%%`)

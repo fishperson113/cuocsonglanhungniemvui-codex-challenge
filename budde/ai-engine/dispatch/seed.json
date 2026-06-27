@@ -1,0 +1,17 @@
+{
+  "members": [
+    { "id": "m1", "name": "An",  "title": "Content Writer",  "skills": ["blog", "copywriting", "SEO content"], "currentLoad": 1 },
+    { "id": "m2", "name": "Bình", "title": "SEO Specialist",  "skills": ["on-page SEO", "keyword research", "technical SEO"], "currentLoad": 0 },
+    { "id": "m3", "name": "Chi",  "title": "Performance Ads", "skills": ["Facebook Ads", "Google Ads", "A/B testing"], "currentLoad": 2 },
+    { "id": "m4", "name": "Dũng", "title": "Designer",        "skills": ["banner", "Figma", "branding"], "currentLoad": 0 },
+    { "id": "m5", "name": "Em",   "title": "Sales Rep",       "skills": ["cold call", "lead nurturing", "CRM"], "currentLoad": 1 }
+  ],
+  "tasks": [
+    { "id": 1, "title": "Viết blog SEO về tính năng mới", "description": "Viết bài blog chuẩn SEO giới thiệu tính năng mới của sản phẩm, có keyword research.", "status": "todo", "assigneeId": null, "labels": ["content", "seo"], "priority": 2, "artifactUrl": null },
+    { "id": 2, "title": "Thiết kế banner campaign Tết", "description": "Thiết kế bộ banner cho chiến dịch Tết, theo brand guideline.", "status": "todo", "assigneeId": null, "labels": ["design"], "priority": 1, "artifactUrl": null },
+    { "id": 3, "title": "Chạy A/B test Facebook Ads", "description": "Set up và chạy A/B test cho campaign Facebook Ads, tối ưu CPA.", "status": "todo", "assigneeId": null, "labels": ["ads"], "priority": 2, "artifactUrl": null },
+    { "id": 4, "title": "Gọi 20 lead nóng tuần này", "description": "Liên hệ 20 lead chất lượng cao tuần này, cập nhật CRM.", "status": "todo", "assigneeId": null, "labels": ["sales"], "priority": 3, "artifactUrl": null },
+    { "id": 5, "title": "Làm report tổng kết hiệu quả marketing tuần", "description": "Tổng hợp số liệu các kênh marketing tuần qua thành BÁO CÁO PDF.", "status": "todo", "assigneeId": null, "labels": ["report"], "priority": 2, "artifactUrl": null },
+    { "id": 6, "title": "Soạn slide pitch cho khách hàng Y", "description": "Soạn bộ SLIDE thuyết trình pitch sản phẩm cho khách hàng Y.", "status": "todo", "assigneeId": null, "labels": ["slides"], "priority": 1, "artifactUrl": null }
+  ]
+}

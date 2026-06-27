@@ -1,0 +1,12 @@
+{
+  "description": "Kỳ vọng phân công dựa trên seed.json. assignee = id member, 'ai-agent', hoặc MẢNG các lựa chọn chấp nhận được (agent trúng 1 trong số đó là đạt).",
+  "expectNoTodoLeft": true,
+  "tasks": {
+    "1": { "assignee": ["m1", "m2"], "why": "Viết blog SEO → Content Writer (An) hoặc SEO Specialist (Bình)" },
+    "2": { "assignee": "m4", "why": "Thiết kế banner → Designer (Dũng)" },
+    "3": { "assignee": "m3", "why": "A/B test Facebook Ads → Performance Ads (Chi)" },
+    "4": { "assignee": "m5", "why": "Gọi lead + CRM → Sales Rep (Em)" },
+    "5": { "assignee": "ai-agent", "why": "Viết BÁO CÁO PDF → AI tự nhận (in-scope)" },
+    "6": { "assignee": "ai-agent", "why": "Soạn SLIDE → AI tự nhận (in-scope)" }
+  }
+}

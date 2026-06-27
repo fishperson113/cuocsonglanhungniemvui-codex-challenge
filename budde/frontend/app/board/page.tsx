@@ -10,8 +10,9 @@ import {
   LinkIcon,
   PlusIcon,
   UserPlusIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { fetchSession, logout, type User } from "../lib/auth";
+import { fetchSession, getToken, logout, type User } from "../lib/auth";
 import NavTabs from "../components/NavTabs";
 import {
   assignTask,
@@ -26,6 +27,19 @@ import {
   type Member,
   type TaskStatus,
 } from "../lib/board";
+
+interface BoardProfile {
+  id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  role: string;
+  description: string;
+}
+
+interface ListProfilesResponse {
+  profiles: BoardProfile[];
+}
 
 const COLUMNS: { status: TaskStatus; label: string; accent: string }[] = [
   { status: "todo", label: "To Do", accent: "from-slate-500 to-slate-600" },
@@ -74,18 +88,39 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function isCompleteUserProfile(profile: BoardProfile | null | undefined): boolean {
+  return Boolean(
+    profile &&
+      profile.name.trim() &&
+      profile.email.trim() &&
+      profile.role.trim() &&
+      profile.description.trim(),
+  );
+}
+
+function belongsToUser(profile: BoardProfile, user: User): boolean {
+  return (
+    profile.user_id === user.id ||
+    profile.id === user.id ||
+    profile.email.trim().toLowerCase() === user.email.trim().toLowerCase()
+  );
+}
+
 export default function BoardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [tasks, setTasks] = useState<KanbanTask[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [hasCompleteProfile, setHasCompleteProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dispatching, setDispatching] = useState(false);
   const [dispatchLogs, setDispatchLogs] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [newTaskAssigneeId, setNewTaskAssigneeId] = useState("");
   const [draggingTaskId, setDraggingTaskId] = useState<number | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<TaskStatus | null>(null);
   const [savingTaskIds, setSavingTaskIds] = useState<number[]>([]);
@@ -100,6 +135,20 @@ export default function BoardPage() {
     setMembers(loadedMembers);
   }, []);
 
+  const loadProfileStatus = useCallback(async (sessionUser: User): Promise<boolean> => {
+    try {
+      const res = await fetch("/profile", {
+        headers: { Authorization: `Bearer ${getToken() ?? ""}` },
+      });
+      if (!res.ok) return false;
+      const data: ListProfilesResponse = await res.json();
+      const profile = data.profiles?.find((item) => belongsToUser(item, sessionUser));
+      return isCompleteUserProfile(profile);
+    } catch {
+      return false;
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
 
@@ -111,6 +160,7 @@ export default function BoardPage() {
           return;
         }
         setUser(sessionUser);
+        setHasCompleteProfile(await loadProfileStatus(sessionUser));
         setAuthChecked(true);
         await load();
       })
@@ -123,7 +173,7 @@ export default function BoardPage() {
     return () => {
       active = false;
     };
-  }, [load, router]);
+  }, [load, loadProfileStatus, router]);
 
   async function withBusy(fn: () => Promise<void>) {
     setBusy(true);
@@ -258,10 +308,21 @@ export default function BoardPage() {
     if (!title) return;
 
     await withBusy(async () => {
-      await createTask(title, newDescription.trim());
+      await createTask(title, newDescription.trim(), newTaskAssigneeId || undefined);
       setNewTitle("");
       setNewDescription("");
+      setNewTaskAssigneeId("");
+      setTaskDialogOpen(false);
     });
+  }
+
+  async function handleJoinBoard() {
+    if (!hasCompleteProfile) {
+      router.push("/profiles");
+      return;
+    }
+
+    await withBusy(async () => void (await joinBoard()));
   }
 
   async function handleLogout() {
@@ -360,36 +421,97 @@ export default function BoardPage() {
                   {dispatching ? "Đang điều phối..." : "AI điều phối"}
                 </button>
 
-                <form
-                  onSubmit={submitTask}
-                  className="ml-auto grid flex-1 gap-2 sm:min-w-[420px] sm:grid-cols-[1fr_1fr_auto]"
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setTaskDialogOpen(true)}
+                  className="ml-auto inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
                 >
-                  <input
-                    value={newTitle}
-                    onChange={(event) => setNewTitle(event.target.value)}
-                    placeholder="New task title"
-                    className={inputClass}
-                  />
-                  <input
-                    value={newDescription}
-                    onChange={(event) => setNewDescription(event.target.value)}
-                    placeholder="Description"
-                    className={inputClass}
-                  />
-                  <button
-                    type="submit"
-                    disabled={busy || !newTitle.trim()}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
-                  >
-                    <PlusIcon className="h-4 w-4" />
-                    Add
-                  </button>
-                </form>
+                  <PlusIcon className="h-4 w-4" />
+                  Add
+                </button>
               </>
             )}
           </div>
         </section>
 
+        {taskDialogOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-slate-950 p-6 shadow-2xl shadow-black/40">
+              <div className="mb-5 flex items-center justify-between gap-4">
+                <h2 className="text-lg font-semibold text-white">Add task</h2>
+                <button
+                  type="button"
+                  onClick={() => setTaskDialogOpen(false)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+                  aria-label="Close"
+                  title="Close"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={submitTask} className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-300">Name</label>
+                  <input
+                    value={newTitle}
+                    onChange={(event) => setNewTitle(event.target.value)}
+                    placeholder="Task name"
+                    className={inputClass}
+                    autoFocus
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-300">Description</label>
+                  <textarea
+                    value={newDescription}
+                    onChange={(event) => setNewDescription(event.target.value)}
+                    placeholder="Description"
+                    className={inputClass}
+                    rows={4}
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-slate-300">Assign</label>
+                  <select
+                    value={newTaskAssigneeId}
+                    onChange={(event) => setNewTaskAssigneeId(event.target.value)}
+                    className={inputClass}
+                  >
+                    <option value="">Unassigned</option>
+                    {members.map((member) => (
+                      <option key={member.id} value={member.id}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setTaskDialogOpen(false)}
+                    className="rounded-xl border border-white/10 px-4 py-2 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={busy || !newTitle.trim()}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-fuchsia-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 disabled:opacity-50"
+                  >
+                    <PlusIcon className="h-4 w-4" />
+                    Add
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        ) : null}
         {error ? (
           <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
             {error}

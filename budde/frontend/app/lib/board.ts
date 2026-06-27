@@ -86,13 +86,22 @@ export async function updateTaskStatus(id: number, status: TaskStatus): Promise<
   if (!res.ok) throw new Error(await parseError(res));
 }
 
-export async function createTask(title: string, description: string): Promise<void> {
+export async function createTask(
+  title: string,
+  description: string,
+  assigneeId?: string,
+): Promise<KanbanTask> {
   const res = await fetch("/tasks", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ title, description }),
+    body: JSON.stringify({
+      title,
+      description,
+      ...(assigneeId ? { assigneeId, status: "in_progress" } : {}),
+    }),
   });
   if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<KanbanTask>;
 }
 
 // ── AI Dispatch (chạy nền + polling) ────────────────────────────────

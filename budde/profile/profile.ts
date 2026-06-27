@@ -1,9 +1,16 @@
 import { api, APIError } from "encore.dev/api";
+import { getAuthData } from "~encore/auth";
 import { SQLDatabase } from "encore.dev/storage/sqldb";
 
 const db = new SQLDatabase("profile", {
   migrations: "./migrations",
 });
+
+interface AuthInfo {
+  userID: string;
+  email: string;
+  role: string;
+}
 
 export interface ProfileResponse {
   id: string;
@@ -63,28 +70,41 @@ async function loadProfileByID(id: string): Promise<ProfileRow | null> {
   return db.queryRow<ProfileRow>`
     SELECT id, user_id, full_name, email, role, description, created_at, updated_at
     FROM profiles
-    WHERE user_id = ${id} OR id = ${id}
+    WHERE user_id = ${id} OR id = ${id} OR email = ${id}
     LIMIT 1
   `;
 }
 
 async function saveProfile(p: UpsertRequest): Promise<ProfileResponse> {
+  const auth = (getAuthData as () => AuthInfo | null)();
+  if (!auth) throw APIError.unauthenticated("authentication required");
+
   const name = (p.name ?? p.full_name ?? p.fullName ?? "").trim();
-  const email = (p.email ?? "").trim();
-  const role = (p.role ?? "user").trim();
+  const email = (p.email ?? auth.email ?? "").trim().toLowerCase();
+  const role = (p.role ?? "").trim();
   const description = (p.description ?? "").trim();
-  const id = (p.id ?? email ?? "").trim();
 
   if (!name) throw APIError.invalidArgument("name is required");
-  if (!id) throw APIError.invalidArgument("id or email is required");
+  if (!email) throw APIError.invalidArgument("email is required");
+  if (!role) throw APIError.invalidArgument("title is required");
+  if (!description) throw APIError.invalidArgument("description is required");
+
+  const existing = await db.queryRow<{ id: string }>`
+    SELECT id
+    FROM profiles
+    WHERE user_id = ${auth.userID} OR id = ${auth.userID} OR email = ${email}
+    LIMIT 1
+  `;
+  const id = existing?.id ?? auth.userID;
 
   const row = await db.queryRow<ProfileRow>`
     INSERT INTO profiles (id, user_id, full_name, email, role, description, subjects, availability)
     VALUES (
-      ${id}, ${id}, ${name}, ${email}, ${role}, ${description},
+      ${id}, ${auth.userID}, ${name}, ${email}, ${role}, ${description},
       '[]'::jsonb, '{}'::jsonb
     )
-    ON CONFLICT (user_id) DO UPDATE SET
+    ON CONFLICT (id) DO UPDATE SET
+      user_id = EXCLUDED.user_id,
       full_name = EXCLUDED.full_name,
       email = EXCLUDED.email,
       role = EXCLUDED.role,

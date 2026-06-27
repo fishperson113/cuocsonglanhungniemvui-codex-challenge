@@ -18,6 +18,7 @@ interface ProfileRow {
   full_name: string | null;
   email: string | null;
   role: string | null;
+  description: string | null;
 }
 
 interface SyncResponse {
@@ -31,10 +32,18 @@ interface JoinResponse {
 }
 
 function memberName(row: ProfileRow): string {
-  const name = (row.full_name ?? "").trim();
-  if (name) return name;
-  const email = (row.email ?? "").trim();
-  return email ? email.split("@")[0] : row.user_id;
+  return (row.full_name ?? "").trim();
+}
+
+function isCompleteProfile(row: ProfileRow | null): row is ProfileRow {
+  return Boolean(
+    row &&
+      row.user_id &&
+      (row.full_name ?? "").trim() &&
+      (row.email ?? "").trim() &&
+      (row.role ?? "").trim() &&
+      (row.description ?? "").trim(),
+  );
 }
 
 async function upsertMember(id: string, name: string, title: string): Promise<void> {
@@ -50,21 +59,21 @@ async function upsertMember(id: string, name: string, title: string): Promise<vo
 
 /**
  * POST /members/sync
- * Import every profile into the shared board as a member.
+ * Import complete profiles into the shared board as members.
  * Handy for seeding the board from existing users.
  */
 export const syncMembers = api(
   { expose: true, auth: true, method: "POST", path: "/members/sync" },
   async (): Promise<SyncResponse> => {
     const rows = profileDb.query<ProfileRow>`
-      SELECT user_id, full_name, email, role
+      SELECT user_id, full_name, email, role, description
       FROM profiles
       ORDER BY updated_at DESC
     `;
 
     let synced = 0;
     for await (const row of rows) {
-      if (!row.user_id) continue;
+      if (!isCompleteProfile(row)) continue;
       await upsertMember(row.user_id, memberName(row), (row.role ?? "").trim());
       synced++;
     }
@@ -84,14 +93,23 @@ export const joinBoard = api(
     if (!auth) throw APIError.unauthenticated("authentication required");
 
     const profile = await profileDb.queryRow<ProfileRow>`
-      SELECT user_id, full_name, email, role
+      SELECT user_id, full_name, email, role, description
       FROM profiles
-      WHERE user_id = ${auth.userID} OR id = ${auth.userID}
+      WHERE user_id = ${auth.userID} OR id = ${auth.userID} OR email = ${auth.email}
+      ORDER BY CASE
+        WHEN user_id = ${auth.userID} THEN 0
+        WHEN id = ${auth.userID} THEN 1
+        ELSE 2
+      END
       LIMIT 1
     `;
 
-    const name = profile ? memberName(profile) : auth.email.split("@")[0];
-    const title = (profile?.role ?? "").trim();
+    if (!isCompleteProfile(profile)) {
+      throw APIError.invalidArgument("complete profile before joining board");
+    }
+
+    const name = memberName(profile);
+    const title = (profile.role ?? "").trim();
 
     await upsertMember(auth.userID, name, title);
 

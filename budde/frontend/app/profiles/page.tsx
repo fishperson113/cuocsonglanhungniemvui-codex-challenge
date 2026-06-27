@@ -215,6 +215,7 @@ export default function ProfilesPage() {
                     value={form.role}
                     onChange={(e) => setForm({ ...form, role: e.target.value })}
                     placeholder="Ex: Design, Report, Sales, Ads,..."
+                    required
                   />
                 </div>
                 <div>
@@ -225,6 +226,7 @@ export default function ProfilesPage() {
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     placeholder="Vài dòng giới thiệu..."
+                    required
                   />
                 </div>
 

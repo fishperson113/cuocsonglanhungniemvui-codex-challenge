@@ -1,110 +1,77 @@
+/**
+ * ai-engine service — orchestration qua Claude CLI (Track B, Pro quota).
+ *
+ * Phase 1: chỉ có endpoint smoke test để verify subprocess `claude` CLI chạy được
+ * từ trong Encore runtime. Agent dispatch / MCP tools / streaming sẽ thêm ở các phase sau.
+ */
 import { api } from "encore.dev/api";
-import { secret } from "encore.dev/config";
 import log from "encore.dev/log";
+import { runClaude } from "./claude/cli";
 
-const n8nWebhookUrl = secret("N8nWebhookUrl");
-
-// ── Circuit breaker & timeout config ──────────────────────────────────────────
-
-/** Max consecutive failures before circuit opens. */
-const FAILURE_THRESHOLD = 5;
-
-/** How long the circuit stays open before allowing a probe request. */
-const RESET_TIMEOUT_MS = 30_000; // 30 s
-
-/** Per-request timeout for the n8n fetch call. */
-const REQUEST_TIMEOUT_MS = 15_000; // 15 s
-
-// In-memory circuit-breaker state.
-let failures = 0;
-let openedAt = 0;
-
-function isCircuitOpen(): boolean {
-  if (openedAt === 0) return false;
-  // After RESET_TIMEOUT_MS transition to half-open (let one request through).
-  if (Date.now() - openedAt >= RESET_TIMEOUT_MS) {
-    openedAt = 0;
-    failures = 0;
-    return false;
-  }
-  return true;
-}
-
-function onError() {
-  failures++;
-  if (failures >= FAILURE_THRESHOLD) {
-    openedAt = Date.now();
-    log.warn("n8n circuit breaker opened — rejecting requests", { failures });
-  }
-}
-
-function onSuccess() {
-  if (openedAt !== 0 || failures > 0) {
-    failures = 0;
-    openedAt = 0;
-    log.info("n8n circuit breaker closed");
-  }
-}
-
-// ── API ────────────────────────────────────────────────────────────────────────
-
-export interface AIRequest {
+export interface AskRequest {
+  /** Prompt gửi cho claude CLI. */
   message: string;
+  /** Model override (vd "claude-opus-4-8"). Bỏ trống = mặc định CLI. */
+  model?: string;
 }
 
-export interface AIResponse {
-  reply: unknown;
+export interface AskResponse {
+  reply: string;
+  isError: boolean;
+  durationMs?: number;
+  numTurns?: number;
+  costUsd?: number;
+  sessionId?: string;
 }
 
-export const send = api<AIRequest, AIResponse>(
-  { method: "POST" },
-  async ({ message }) => {
-    if (isCircuitOpen()) {
-      throw new Error("n8n temporarily unavailable — too many recent failures");
+/**
+ * Gọi claude CLI 1 lượt (synchronous). Dùng để smoke-test subprocess qua app.
+ * Lưu ý: chạy đồng bộ nên chỉ hợp prompt ngắn — agent dài sẽ chuyển sang streamOut.
+ */
+export const ask = api<AskRequest, AskResponse>(
+  { method: "POST", expose: true },
+  async ({ message, model }) => {
+    log.info("ai-engine: spawn claude CLI", { model: model ?? "(default)" });
+
+    const res = await runClaude(message, {
+      model,
+      timeoutMs: 120_000,
+      onEvent: (evt) => {
+        if (evt.type === "result") {
+          log.info("claude result", { isError: evt.is_error, durationMs: evt.duration_ms });
+        }
+      },
+    });
+
+    if (res.isError) {
+      log.error("claude CLI error", { exitCode: res.exitCode, stderr: res.stderr.slice(-500) });
     }
 
-    const url = n8nWebhookUrl();
-    log.info("forwarding to n8n ai engine", { url });
+    return {
+      reply: res.result,
+      isError: res.isError,
+      durationMs: res.durationMs,
+      numTurns: res.numTurns,
+      costUsd: res.costUsd,
+      sessionId: res.sessionId,
+    };
+  },
+);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    try {
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
-
-      if (resp.status >= 400) {
-        const body = await resp.text();
-        log.error("n8n error", { status: resp.status, body });
-        onError();
-        throw new Error(`n8n error: ${resp.status}: ${body}`);
-      }
-
-      onSuccess();
-      const reply = await resp.json();
-      return { reply };
-    } catch (err) {
-      clearTimeout(timeout);
-
-      if ((err as Error).name === "AbortError") {
-        log.error("n8n request timed out", { timeout_ms: REQUEST_TIMEOUT_MS });
-        onError();
-        throw new Error("n8n request timed out");
-      }
-
-      // Already-logged n8n application errors just propagate.
-      if (String(err).includes("n8n error:")) throw err;
-
-      // Network-level failures.
-      log.error("n8n request failed", { error: String(err) });
-      onError();
-      throw err;
-    }
+/** Health check nhanh: gọi claude trả về 1 từ để xác nhận CLI + login OK. */
+export const ping = api<void, AskResponse>(
+  { method: "POST", expose: true },
+  async () => {
+    const res = await runClaude("Reply with exactly one word: pong", {
+      timeoutMs: 60_000,
+    });
+    return {
+      reply: res.result,
+      isError: res.isError,
+      durationMs: res.durationMs,
+      numTurns: res.numTurns,
+      costUsd: res.costUsd,
+      sessionId: res.sessionId,
+    };
   },
 );

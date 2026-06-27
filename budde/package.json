@@ -7,7 +7,8 @@
   "type": "module",
   "scripts": {
     "test": "vitest --passWithNoTests",
-    "gen": "encore gen client --output=./frontend/app/lib/client.ts --env=local"
+    "gen": "encore gen client --output=./frontend/app/lib/client.ts --env=local",
+    "smoke:claude": "node ai-engine/scripts/smoke.ts"
   },
   "devDependencies": {
     "@types/luxon": "^3.0.1",

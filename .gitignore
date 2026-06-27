@@ -23,3 +23,7 @@ build/
 src/student-web/next-env.d.ts
 src/admin-web/next-env.d.ts
 serviceAccountKey.json
+budde/AGENTS.md
+budde/AI-DISPATCHER-HACKATHON-PLAN.md
+budde/HACKATHON-MILESTONE.md
+budde/artifacts/*

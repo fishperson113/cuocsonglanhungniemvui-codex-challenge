@@ -12,7 +12,6 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<"admin" | "user">("user");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +23,7 @@ export default function LoginPage() {
       if (mode === "login") {
         await login(email, password);
       } else {
-        await register(email, password, name, role);
+        await register(email, password, name);
       }
       router.push("/profiles");
     } catch (err) {
@@ -117,19 +116,6 @@ export default function LoginPage() {
                 required
               />
             </Field>
-
-            {mode === "register" && (
-              <Field label="Vai trò">
-                <select
-                  className={inputClass}
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as "admin" | "user")}
-                >
-                  <option className="bg-slate-800" value="user">user</option>
-                  <option className="bg-slate-800" value="admin">admin</option>
-                </select>
-              </Field>
-            )}
 
             {error && (
               <div className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">

@@ -2,16 +2,16 @@
  * API điều phối cho FE: 1 nút bấm → start (chạy nền) + polling status.
  *
  *   POST /dispatch/start            → tạo job, chạy agent nền, trả { jobId } NGAY
- *   GET  /dispatch/status/:jobId    → trạng thái job (logs + board snapshot + summary)
+ *   GET  /dispatch/status/:jobId    → trạng thái job (logs + summary)
  *
- * FE: bấm nút → start → cứ ~1s gọi status, vẽ lại board theo `tasks`, append `logs`,
- * dừng poll khi status != "running".
+ * Board state (card nhảy cột) → FE poll thẳng `/tasks` của service board (DB thật).
+ * FE: bấm nút → start → ~1s gọi status (logs) + reload /tasks (board), dừng khi status != "running".
  */
 import { api, APIError } from "encore.dev/api";
 import log from "encore.dev/log";
 import { randomUUID } from "node:crypto";
-import { makeFakeRepo } from "./dispatch/fake-repo";
 import { runDispatch } from "./dispatch/run";
+import { encoreRepo } from "./dispatch/encore-repo";
 import { createJob, getJob, pruneOldJobs, type DispatchJob } from "./dispatch/job-store";
 
 export interface StartResponse {
@@ -21,7 +21,7 @@ export interface StartResponse {
 
 /**
  * Bấm nút "Start AI Dispatch". Khởi tạo job + chạy agent NỀN (không await),
- * trả jobId tức thì để FE bắt đầu poll.
+ * trả jobId tức thì để FE bắt đầu poll. Agent ghi assignment vào DB board thật.
  */
 export const startDispatch = api<void, StartResponse>(
   { method: "POST", expose: true, path: "/dispatch/start" },
@@ -29,18 +29,16 @@ export const startDispatch = api<void, StartResponse>(
     pruneOldJobs();
 
     const jobId = randomUUID();
-    const repo = makeFakeRepo(); // TODO Phase 4: thay bằng encoreRepo (DB thật)
-    const job = createJob(jobId, repo.dump());
+    const job = createJob(jobId);
     log.info("dispatch: start job", { jobId });
 
     // ── Fire-and-forget: agent chạy nền, mutate job qua callback ──────
+    // Context request được AsyncLocalStorage giữ lại nên ~encore/clients (board) vẫn gọi được.
     void (async () => {
       try {
-        const summary = await runDispatch(repo, (line) => {
+        const summary = await runDispatch(encoreRepo, (line) => {
           job.logs.push(line);
-          job.tasks = repo.dump(); // cập nhật board mỗi bước → FE thấy card nhảy
         });
-        job.tasks = repo.dump();
         job.summary = summary;
         job.status = "done";
         log.info("dispatch: job done", { jobId });

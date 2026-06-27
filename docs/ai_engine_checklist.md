@@ -10,7 +10,8 @@
 | **Phase 1** | Wrapper subprocess `claude` CLI + smoke test | ✅ **Done & verified** |
 | **Phase 2** | Contract + `FakeRepo` + seed + Agent SDK + MCP tools + `runDispatch` (agent gán đúng) | ✅ **Done & verified** |
 | **Phase 3** | Dispatch API cho FE: `POST /dispatch/start` (chạy nền) + `GET /dispatch/status/:jobId` (polling) | ✅ **Done & verified (encore run)** |
-| Phase 4 | `generate_document` (tectonic LaTeX) + realtime + `EncoreRepo` (nối DB thật) | ⬜ Chưa |
+| **Phase 4** | Đấu nối board thật + FE: `EncoreRepo` (`~encore/clients`) + nút "Start" polling trên `/board` | ✅ **Done & verified (encore run)** |
+| Phase 5 | `generate_document` (tectonic LaTeX) cho task AI claim (#5/#6) + đính artifact PDF | ⬜ Chưa |
 
 ---
 
@@ -130,9 +131,34 @@ npm test                                # chạy agent thật → in bảng + so
 
 > ⚠️ Hiện dùng `FakeRepo` (seed) — mỗi lần start là 1 board mới reset. Phase 4 đổi `makeFakeRepo()` → `encoreRepo` (DB thật) trong `dispatch-api.ts`, mọi thứ khác giữ nguyên.
 
-## Phase 4 — Self-serve LaTeX + Streaming + Encore ⬜
+## Phase 4 — Đấu nối board thật + FE ✅
+
+> Nối agent vào service `board` (Postgres) có sẵn + nút "Start" trên FE dùng **polling**.
+
+### Code đã viết
+- [x] `shared/contract.ts` là SSOT; `ai-engine/dispatch/contract.ts` **re-export** từ shared (hết drift)
+- [x] `ai-engine/dispatch/encore-repo.ts` — `encoreRepo` implement `DispatchRepository` qua `~encore/clients` (`board.listTasks/listMembers/assignTask/claimTask/attachArtifact`). Board khớp 100% contract nên map 1-1
+- [x] `ai-engine/dispatch/job-store.ts` — bỏ snapshot `tasks` (board state lấy thẳng từ `/tasks` DB), chỉ giữ logs/status/summary
+- [x] `ai-engine/dispatch-api.ts` — dùng `encoreRepo` thay `FakeRepo`; fire-and-forget giữ context qua AsyncLocalStorage nên `~encore/clients` gọi được từ background
+- [x] `frontend/app/board/page.tsx` — `startDispatch()` đổi từ **WebSocket** sang **polling**: `POST /dispatch/start` → mỗi 1.2s `GET /dispatch/status/:jobId` (logs) + `loadBoard()` (card nhảy cột) → dừng khi `status!=="running"`, hiện `summary`
+
+### Test đã chạy (qua `encore run`, port 4001)
+- [x] App build OK (`encoreRepo` + `~encore/clients` compile)
+- [x] `POST /dispatch/start` → jobId tức thì; agent ghi **thẳng vào Postgres board**
+- [x] Poll thấy DB đổi: `todo 6→1→0`, `in_progress 0→5→6`; `status running→done`
+- [x] Assignment cuối trong DB đúng: #2→Designer, #3→Ads, #4→Sales, #5/#6→🤖 ai-agent (#1→SEO, nằm trong tập chấp nhận); `currentLoad` tự cập nhật (derived)
+- [x] `GET /board` (Next dev) HTTP 200, render Kanban + nút Start, không lỗi compile
+
+### Cách verify manual (UI thật)
+```bash
+cd budde
+encore run            # mặc định :4000, hoặc encore run --port=4001
+# mở http://127.0.0.1:4000/board  → bấm "Start" ở panel "AI Dispatch" bên phải
+```
+→ panel log chạy suy luận agent; card tự nhảy từ Todo sang In Progress kèm tên member / nhãn AI; xong hiện summary.
+> Reset để demo lại: PATCH mỗi task về `{"status":"todo","assigneeId":null}` (hoặc thêm endpoint reset sau).
+
+## Phase 5 — Self-serve LaTeX (generate_document) ⬜
 - [ ] Cài + warm-cache `tectonic`; template `report.tex` / `slides.tex` (`%%TITLE%%`, `%%BODY%%`)
-- [ ] Tool `generate_document` (ghép template → `tectonic --untrusted` → PDF → `attachArtifact`)
-- [ ] `EncoreRepo` (`~encore/clients` gọi service `board`)
-- [ ] `api.streamOut` `/ai/dispatch/stream` host `runDispatch` → bắn `DispatchEvent` ra FE
-- [ ] FE: nút "Start AI Dispatch" + panel log + move card realtime
+- [ ] Tool `generate_document` (ghép template → `tectonic --untrusted` → PDF → `repo.attachArtifact`) cho task #5/#6 AI đã claim
+- [ ] Endpoint serve `/artifacts/*` để FE tải PDF; card hiện link artifact (FE đã có sẵn chỗ render `artifactUrl`)

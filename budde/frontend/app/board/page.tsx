@@ -1,8 +1,8 @@
-﻿"use client";
+"use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DragEvent, FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import {
   ArrowPathIcon,
   ArrowRightIcon,
@@ -14,9 +14,11 @@ import { fetchSession, logout, type User } from "../lib/auth";
 import {
   assignTask,
   createTask,
+  getDispatchStatus,
   joinBoard,
   listMembers,
   listTasks,
+  startDispatch,
   syncMembers,
   updateTaskStatus,
   type KanbanTask,
@@ -78,6 +80,8 @@ export default function BoardPage() {
   const [tasks, setTasks] = useState<KanbanTask[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [dispatching, setDispatching] = useState(false);
+  const [dispatchLogs, setDispatchLogs] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
@@ -155,6 +159,56 @@ export default function BoardPage() {
     } finally {
       setSavingTaskIds((current) => current.filter((id) => id !== taskId));
     }
+  }
+
+  function handleDispatch() {
+    if (dispatching) return;
+
+    setError(null);
+    setDispatching(true);
+    setDispatchLogs(["Dang khoi dong AI dieu phoi..."]);
+
+    void (async () => {
+      try {
+        const jobId = await startDispatch();
+        let seen = 0;
+
+        const timer = window.setInterval(() => {
+          void (async () => {
+            try {
+              const job = await getDispatchStatus(jobId);
+
+              if (job.logs.length > seen) {
+                const fresh = job.logs.slice(seen);
+                seen = job.logs.length;
+                setDispatchLogs((current) => [...current, ...fresh].slice(-80));
+              }
+
+              await load();
+
+              if (job.status !== "running") {
+                window.clearInterval(timer);
+                setDispatching(false);
+                if (job.summary) {
+                  setDispatchLogs((current) =>
+                    [...current, "- Hoan tat -", job.summary as string].slice(-80),
+                  );
+                }
+                if (job.error) setError(job.error);
+                await load();
+              }
+            } catch (err) {
+              window.clearInterval(timer);
+              setDispatching(false);
+              setError(err instanceof Error ? err.message : String(err));
+            }
+          })();
+        }, 1200);
+      } catch (err) {
+        setDispatching(false);
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    })();
   }
 
   function handleDragStart(event: DragEvent<HTMLElement>, taskId: number) {
@@ -291,7 +345,20 @@ export default function BoardPage() {
               Sync profiles
             </button>
 
-            <form onSubmit={submitTask} className="ml-auto grid flex-1 gap-2 sm:min-w-[420px] sm:grid-cols-[1fr_1fr_auto]">
+            <button
+              type="button"
+              disabled={busy || dispatching}
+              onClick={handleDispatch}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-cyan-500/30 disabled:opacity-50"
+            >
+              <span className={dispatching ? "animate-pulse" : ""}>AI</span>
+              {dispatching ? "Dispatching..." : "AI dispatch"}
+            </button>
+
+            <form
+              onSubmit={submitTask}
+              className="ml-auto grid flex-1 gap-2 sm:min-w-[420px] sm:grid-cols-[1fr_1fr_auto]"
+            >
               <input
                 value={newTitle}
                 onChange={(event) => setNewTitle(event.target.value)}
@@ -322,6 +389,25 @@ export default function BoardPage() {
           </div>
         ) : null}
 
+        {dispatching || dispatchLogs.length > 0 ? (
+          <div className="mb-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 backdrop-blur-xl">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-cyan-300">
+              <span className={dispatching ? "animate-pulse" : ""}>*</span>
+              AI Dispatch {dispatching ? "running" : "complete"}
+            </div>
+            <div className="max-h-60 space-y-1 overflow-auto text-xs leading-relaxed text-slate-300">
+              {dispatchLogs.map((line, index) => (
+                <div
+                  key={`${index}-${line}`}
+                  className="whitespace-pre-wrap rounded bg-slate-900/50 px-2 py-1"
+                >
+                  {line}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <section className="grid flex-1 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {COLUMNS.map((column) => {
             const columnTasks = tasks.filter((task) => task.status === column.status);
@@ -340,7 +426,9 @@ export default function BoardPage() {
               >
                 <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <span className={`h-2.5 w-2.5 rounded-full bg-gradient-to-r ${column.accent}`} />
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full bg-gradient-to-r ${column.accent}`}
+                    />
                     <h2 className="font-semibold text-white">{column.label}</h2>
                   </div>
                   <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-slate-300">
@@ -423,7 +511,9 @@ function TaskCard({
         <div className="min-w-0">
           <h3 className="break-words text-sm font-medium text-white">{task.title}</h3>
           {task.description ? (
-            <p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-400">{task.description}</p>
+            <p className="mt-1 line-clamp-3 text-xs leading-5 text-slate-400">
+              {task.description}
+            </p>
           ) : null}
         </div>
         <span className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-400">

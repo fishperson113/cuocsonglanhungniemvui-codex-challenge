@@ -210,7 +210,7 @@ export default function ProfilesPage() {
                     className={inputClass}
                     value={form.role}
                     onChange={(e) => setForm({ ...form, role: e.target.value })}
-                    placeholder="VD: Học sinh, Giáo viên, Mentor..."
+                    placeholder="Ex: Design, Report, Sales, Ads,..."
                   />
                 </div>
                 <div>

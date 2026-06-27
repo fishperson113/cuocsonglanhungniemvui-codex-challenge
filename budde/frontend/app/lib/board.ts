@@ -94,3 +94,27 @@ export async function createTask(title: string, description: string): Promise<vo
   });
   if (!res.ok) throw new Error(await parseError(res));
 }
+
+// ── AI Dispatch (chạy nền + polling) ────────────────────────────────
+export interface DispatchJob {
+  id: string;
+  status: "running" | "done" | "error";
+  logs: string[];
+  summary?: string;
+  error?: string;
+}
+
+/** Bấm "Start": kích hoạt agent điều phối chạy nền, trả jobId để poll. */
+export async function startDispatch(): Promise<string> {
+  const res = await fetch("/dispatch/start", { method: "POST", headers: authHeaders() });
+  if (!res.ok) throw new Error(await parseError(res));
+  const data: { jobId: string } = await res.json();
+  return data.jobId;
+}
+
+/** Poll trạng thái 1 job dispatch (logs + status + summary). */
+export async function getDispatchStatus(jobId: string): Promise<DispatchJob> {
+  const res = await fetch(`/dispatch/status/${jobId}`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<DispatchJob>;
+}
